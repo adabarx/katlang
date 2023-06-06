@@ -5,11 +5,13 @@ use anyhow::{Result, bail};
 pub enum Token {
     // user generated
     Ident(String),
-    Lit(Literal),
+    Lit(LiteralToken),
     // keywords
+    Import,
     Let,
     Mut,
     Def,
+    Impl,
     Struct,
     Enum,
     Object,
@@ -19,9 +21,12 @@ pub enum Token {
     Match,
     True,
     False,
+    And,
+    Or,
+    Xor,
+    Not,
     // newlines/whitespace
     NewLine,
-    Space,
     Tab,
     // surrounding chars
     LParen,
@@ -30,8 +35,8 @@ pub enum Token {
     RSquirly,
     LBrack,
     RBrack,
-    SingleQuote,
-    DoubleQuote,
+    // SingleQuote,
+    // DoubleQuote,
     LAngle,
     RAngle,
     // symbols
@@ -40,7 +45,6 @@ pub enum Token {
     Pipe,
     Plus,
     Dash,
-    Underscore,
     Equal,
     FSlash,
     BSlash,
@@ -63,7 +67,7 @@ pub enum Token {
 
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Literal {
+pub enum LiteralToken {
     Str(String),
     Num(f64),
 }
@@ -74,14 +78,15 @@ struct LexicalAnalysis {
     tokens: HashMap<usize, Token> // each token is stored with the first char's location as its key
 }
 
-pub struct Lexer {
+#[derive(Debug)]
+pub struct Tokenizer {
     position: usize,
     read_position: usize,
     ch: u8,
     input:Vec<u8>,
 }
 
-impl Lexer {
+impl Tokenizer {
     pub fn new(input: String) -> Self {
         let mut lex = Self {
             position: 0,
@@ -106,6 +111,13 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> (usize, Token) {
+        if let b' ' = self.ch { 
+            if let Some(token) = self.read_whitespace() {
+                return (self.position, token);
+            }
+        }
+
+        let mut next = true;
         let tok = match self.ch {
             b'{'  => Token::LSquirly,
             b'}'  => Token::RSquirly,
@@ -137,51 +149,65 @@ impl Lexer {
             b'~'  => Token::Tilde,
             b'`'  => Token::Grave,
             b'\t' => Token::Tab,
-            b' '  => self.read_whitespace(),
+            b'\n' => Token::NewLine,
 
-            b'\'' | b'"' => Token::Lit(Literal::Str(self.read_string_literal().to_string())),
+            b'\'' | b'"' => Token::Lit(LiteralToken::Str(self.read_string_literal().to_string())),
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+                next = false;
                 let ident = self.read_ident();
                 match ident.as_str() {
+                    "import" => Token::Import,
                     "let"    => Token::Let,
                     "mut"    => Token::Mut,
                     "def"    => Token::Def,
                     "struct" => Token::Struct,
                     "enum"   => Token::Enum,
                     "object" => Token::Object,
+                    "impl"   => Token::Impl,
                     "if"     => Token::If,
                     "elif"   => Token::Elif,
                     "else"   => Token::Else,
                     "match"  => Token::Match,
                     "true"   => Token::True,
                     "false"  => Token::False,
+                    "and"    => Token::And,
+                    "or"     => Token::Or,
+                    "xor"    => Token::Xor,
+                    "not"    => Token::Not,
                     _ => Token::Ident(ident.to_string())
                 }
             },
-            b'0'..=b'9' => Token::Lit(Literal::Num(self.read_number_literal())),
+            b'0'..=b'9' => {
+                next = false;
+                Token::Lit(LiteralToken::Num(self.read_number_literal()))
+            },
             0 => Token::EOF,
             _ => Token::EOF,
         };
 
-        self.next_char();
+        if next { self.next_char() };
         (self.position, tok)
     }
 
-    fn read_whitespace(&mut self) -> Token {
-        if self.prev_match(b'\t') || self.prev_match(b'\n') {
+    fn read_whitespace(&mut self) -> Option<Token> {
+        if self.prev_match(b'\t') || self.prev_match(b'\n') || self.prev_match(b' ') {
             if let Ok(matched) = self.peek_match("   ") { // 4 spaces to a tab?
                 if matched {                              // there's got to be a better way...
                     self.next_char();
                     self.next_char();
                     self.next_char();
-                    Token::Tab
+                    Some(Token::Tab)
                 }
-                else { Token:: Space }
+                else {
+                    self.next_char();
+                    None
+                }
             } else {
-                Token::EOF
+                Some(Token::EOF)
             }
         } else {
-            Token::Space
+            self.next_char();
+            None
         }
     }
 
@@ -222,6 +248,14 @@ impl Lexer {
             self.next_char();
         }
         String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+    }
+
+    fn peek(&self) -> u8 {
+        if self.read_position >= self.input.len() {
+            return 0;
+        } else {
+            return self.input[self.read_position];
+        }
     }
     
     fn peek_match(&self, input: &str) -> Result<bool> {

@@ -1,5 +1,5 @@
 [package]
-name = "KatLang"
+name = "kat-lang"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,5 +7,3 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-regex = "1.8.3"
-regex-macro = "0.2.0"
