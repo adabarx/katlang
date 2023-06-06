@@ -127,12 +127,12 @@ pub enum Operator {
           // |-> fag                    // using a type that matches the function params
 
     // TODO: bitwise 
-    // BitAnd,    // &
-    // BitOr,     // |
-    // BitXor,    // ^
-    // BitNot,    // ~
-    // BitLShift, // <<
-    // BitRShift, // >>
+    // BitAnd,          // &
+    // BitOr,           // |
+    // BitXor,          // ^
+    // BitNot,          // ~
+    // BitLShift,       // <<
+    // BitRShift,       // >>
     // BitAndAssign,    // &=
     // BitOrAssign,     // |=
     // BitXorAssign,    // ^=

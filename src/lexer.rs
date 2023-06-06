@@ -1,5 +1,8 @@
-use std::{str, collections::HashMap};
+#![allow(dead_code)]
+use std::str;
 use anyhow::{Result, bail};
+
+// TODO: tokenize triangles, pipes, eq, and other multi-char operators
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -15,6 +18,8 @@ pub enum Token {
     Struct,
     Enum,
     Object,
+    Trait,
+    Desc,
     If,
     Elif,
     Else,
@@ -35,8 +40,8 @@ pub enum Token {
     RSquirly,
     LBrack,
     RBrack,
-    // SingleQuote,
-    // DoubleQuote,
+    LTriangle,
+    RTriangle,
     LAngle,
     RAngle,
     // symbols
@@ -65,56 +70,40 @@ pub enum Token {
     EOF,
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum LiteralToken {
     Str(String),
     Num(f64),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct LexicalAnalysis {
-    lines: Vec<usize>, // we will store the char location of every newline here
-    tokens: HashMap<usize, Token> // each token is stored with the first char's location as its key
-}
-
 #[derive(Debug)]
-pub struct Tokenizer {
+pub struct Lexer {
     position: usize,
-    read_position: usize,
     ch: u8,
     input:Vec<u8>,
 }
 
-impl Tokenizer {
+impl Lexer {
     pub fn new(input: String) -> Self {
-        let mut lex = Self {
+        let input = input.into_bytes();
+        Self {
             position: 0,
-            read_position: 0,
-            ch: 0,
-            input: input.into_bytes(),
-        };
-        lex.next_char();
-
-        lex
-    }
-
-    fn next_char(&mut self) {
-        if self.read_position >= self.input.len() {
-            self.ch = 0;
-        } else {
-            self.ch = self.input[self.read_position]
+            ch: input[0], // load first char from input string
+            input,
         }
-
-        self.position = self.read_position;
-        self.read_position += 1;
     }
 
-    pub fn next_token(&mut self) -> (usize, Token) {
-        if let b' ' = self.ch { 
-            if let Some(token) = self.read_whitespace() {
-                return (self.position, token);
-            }
+    fn next_char(&mut self) -> Result<u8>{
+        if self.position + 1 >= self.input.len() { bail!("EOF") } 
+
+        self.position += 1;
+        self.ch = self.input[self.position].clone();
+        Ok(self.ch.clone())
+    }
+
+    pub fn next_token(&mut self) -> Result<(usize, Token)> {
+        while self.ch == b' ' || self.ch == b'\t' { // skip whitespace
+            self.next_char()?;
         }
 
         let mut next = true;
@@ -151,10 +140,10 @@ impl Tokenizer {
             b'\t' => Token::Tab,
             b'\n' => Token::NewLine,
 
-            b'\'' | b'"' => Token::Lit(LiteralToken::Str(self.read_string_literal().to_string())),
+            b'\'' | b'"' => Token::Lit(LiteralToken::Str(self.read_string_literal()?.to_string())),
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 next = false;
-                let ident = self.read_ident();
+                let ident = self.read_ident()?;
                 match ident.as_str() {
                     "import" => Token::Import,
                     "let"    => Token::Let,
@@ -163,6 +152,8 @@ impl Tokenizer {
                     "struct" => Token::Struct,
                     "enum"   => Token::Enum,
                     "object" => Token::Object,
+                    "trait"  => Token::Trait,
+                    "desc"   => Token::Desc,
                     "impl"   => Token::Impl,
                     "if"     => Token::If,
                     "elif"   => Token::Elif,
@@ -179,87 +170,64 @@ impl Tokenizer {
             },
             b'0'..=b'9' => {
                 next = false;
-                Token::Lit(LiteralToken::Num(self.read_number_literal()))
+                Token::Lit(LiteralToken::Num(self.read_number_literal()?))
             },
             0 => Token::EOF,
             _ => Token::EOF,
         };
 
-        if next { self.next_char() };
-        (self.position, tok)
+        if next { self.next_char()?; }
+        Ok((self.position, tok))
     }
 
-    fn read_whitespace(&mut self) -> Option<Token> {
-        if self.prev_match(b'\t') || self.prev_match(b'\n') || self.prev_match(b' ') {
-            if let Ok(matched) = self.peek_match("   ") { // 4 spaces to a tab?
-                if matched {                              // there's got to be a better way...
-                    self.next_char();
-                    self.next_char();
-                    self.next_char();
-                    Some(Token::Tab)
-                }
-                else {
-                    self.next_char();
-                    None
-                }
-            } else {
-                Some(Token::EOF)
-            }
-        } else {
-            self.next_char();
-            None
-        }
-    }
-
-    fn read_number_literal(&mut self) -> f64 { 
+    fn read_number_literal(&mut self) -> Result<f64> { 
         let pos = self.position;
         let mut decimal = false;
         loop {
-            match self.ch {
-                b'0'..=b'9' => self.next_char(),
+            match self.next_char()? {
+                b'0'..=b'9' => continue,
                 b'.' => if decimal { break } else {
                     decimal = true;
-                    self.next_char();
                 },
                 _ => break,
             }
         }
-        String::from_utf8_lossy(&self.input[pos..self.position])
+        Ok(String::from_utf8_lossy(&self.input[pos..self.position])
             .to_string()
             .parse::<f64>()
-            .unwrap()
+            .unwrap())
     }
 
-    fn read_string_literal(&mut self) -> String { 
+    fn read_string_literal(&mut self) -> Result<String> { 
         // TODO: escape quote \"
         let quote = self.ch; // store the current single/double quote
-        self.next_char(); // advance to first char of string
+        self.next_char()?; // advance to first char of string
         let pos = self.position;
         loop {
             if self.ch == quote { break }
-            else { self.next_char() }
+            else {  self.next_char()?; }
         }
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+        Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
     }
 
-    fn read_ident(&mut self) -> String {
+    fn read_ident(&mut self) -> Result<String> {
         let pos = self.position;
         while self.ch.is_ascii_alphabetic() || self.ch == b'_' {
-            self.next_char();
+            self.next_char()?;
         }
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+        Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
     }
 
     fn peek(&self) -> u8 {
-        if self.read_position >= self.input.len() {
+        if self.position + 1 >= self.input.len() {
             return 0;
         } else {
-            return self.input[self.read_position];
+            return self.input[self.position + 1];
         }
     }
     
     fn peek_match(&self, input: &str) -> Result<bool> {
-        if input.chars().count() + self.read_position >= self.input.len() { bail!("EOF") };
+        if input.chars().count() + self.position + 1 >= self.input.len() { bail!("EOF") };
 
         let mut forward = 1;
         for ch in input.chars() {
