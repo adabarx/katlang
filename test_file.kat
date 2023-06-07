@@ -1,4 +1,14 @@
+let int = "fasdgjkalhgjkld"
 let x = 4.5
-let y = 2.5
+let y = "2.5"
 let z = 1
+
+if z == y {
+    x *= 2
+}
+
+struct GiJoe {
+    muscle: 10,
+    steroids: "over 9000",
+}
 

@@ -1,14 +1,15 @@
 #![allow(dead_code)]
-use std::str;
 use anyhow::{Result, bail};
 
 // TODO: tokenize triangles, pipes, eq, and other multi-char operators
+// TODO: handle comments
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     // user generated
     Ident(String),
     Lit(LiteralToken),
+
     // keywords
     Import,
     Let,
@@ -30,9 +31,35 @@ pub enum Token {
     Or,
     Xor,
     Not,
+
+    // multi-char operators
+    ReturnOp,
+    PipeOp,
+    AddAssignOp,
+    SubtractAssignOp,
+    MultiplyAssignOp,
+    DivideAssignOp,
+    ModulusAssignOp,
+    AndOp,
+    OrOp,
+    XorOp,
+    EqualOp,
+    NotEqualOp,
+    LessThanOp,
+    GrtrThanOp,
+    LessEqualOp,
+    GrtrEqualOp,
+    // UnsafeEqualOp,
+    // UnsafeNotEqualOp,
+    // UnsafeLessThanOp,
+    // UnsafeGrtrThanOp,
+    // UnsafeLessEqualOp,
+    // UnsafeGrtrEqualOp,
+
     // newlines/whitespace
     NewLine,
     Tab,
+
     // surrounding chars
     LParen,
     RParen,
@@ -44,6 +71,7 @@ pub enum Token {
     RTriangle,
     LAngle,
     RAngle,
+
     // symbols
     Comma,
     Dot,
@@ -106,7 +134,6 @@ impl Lexer {
             self.next_char()?;
         }
 
-        let mut next = true;
         let tok = match self.ch {
             b'{'  => Token::LSquirly,
             b'}'  => Token::RSquirly,
@@ -114,27 +141,42 @@ impl Lexer {
             b')'  => Token::RParen,
             b'['  => Token::LBrack,
             b']'  => Token::RBrack,
-            b'<'  => Token::LAngle,
-            b'>'  => Token::RAngle,
+            b'<'  => match self.next_char()? {
+                b'|' => Token::RTriangle,
+                b'=' => Token::LessEqualOp,
+                _ => Token::LAngle,
+            },
+            b'>'  => match self.next_char()? {
+                b'=' => Token::GrtrEqualOp,
+                _ => Token::RAngle,
+            }
             b','  => Token::Comma,
             b'.'  => Token::Dot,
             b'?'  => Token::Question,
             b':'  => Token::Colon,
             b';'  => Token::SemiColon,
-            b'!'  => Token::Bang,
+            b'!'  => if self.next_char()? == b'=' {Token::NotEqualOp } else { Token::Bang },
             b'@'  => Token::At,
             b'#'  => Token::Octothorpe,
             b'$'  => Token::Dollar,
             b'%'  => Token::Percent,
-            b'^'  => Token::Caret,
-            b'&'  => Token::Ampersand,
-            b'*'  => Token::Asterisk,
-            b'-'  => Token::Dash,
-            b'='  => Token::Equal,
-            b'+'  => Token::Plus,
-            b'|'  => Token::Pipe,
+            b'^'  => if self.next_char()? == b'&' { Token::XorOp } else { Token::Caret },
+            b'&'  => if self.next_char()? == b'&' { Token::AndOp } else { Token::Ampersand },
+            b'*'  => if self.next_char()? == b'=' { Token::MultiplyAssignOp } else { Token::Asterisk },
+            b'-'  => if self.next_char()? == b'=' { Token::SubtractAssignOp } else { Token::Dash },
+            b'='  => if self.next_char()? == b'=' { Token::EqualOp } else { Token::Equal },
+            b'+'  => if self.next_char()? == b'=' { Token::AddAssignOp } else { Token::Plus },
+            b'|'  => match self.next_char()? {
+                b'>' => Token::LTriangle,
+                b'|' => Token::OrOp,
+                _ => Token::Pipe,
+            },
             b'\\' => Token::BSlash,
-            b'/'  => Token::FSlash,
+            b'/'  => match self.next_char()? {
+                b'/' => loop { if self.next_char()? != b' ' { break Token::NewLine } } // handle comments
+                b'=' => Token::DivideAssignOp,
+                _ => Token::FSlash,
+            },
             b'~'  => Token::Tilde,
             b'`'  => Token::Grave,
             b'\t' => Token::Tab,
@@ -142,7 +184,6 @@ impl Lexer {
 
             b'\'' | b'"' => Token::Lit(LiteralToken::Str(self.read_string_literal()?.to_string())),
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
-                next = false;
                 let ident = self.read_ident()?;
                 match ident.as_str() {
                     "import" => Token::Import,
@@ -169,14 +210,14 @@ impl Lexer {
                 }
             },
             b'0'..=b'9' => {
-                next = false;
                 Token::Lit(LiteralToken::Num(self.read_number_literal()?))
             },
             0 => Token::EOF,
             _ => Token::EOF,
         };
 
-        if next { self.next_char()?; }
+         self.next_char()?;
+
         Ok((self.position, tok))
     }
 
@@ -201,13 +242,14 @@ impl Lexer {
     fn read_string_literal(&mut self) -> Result<String> { 
         // TODO: escape quote \"
         let quote = self.ch; // store the current single/double quote
-        self.next_char()?; // advance to first char of string
-        let pos = self.position;
+        let mut s = vec![];
         loop {
-            if self.ch == quote { break }
-            else {  self.next_char()?; }
+            let ch = self.next_char()?;
+            if ch == quote { break }
+            s.push(ch as char)
         }
-        Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
+        Ok(String::from_iter(s.iter()))
+
     }
 
     fn read_ident(&mut self) -> Result<String> {
@@ -218,12 +260,11 @@ impl Lexer {
         Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
     }
 
-    fn peek(&self) -> u8 {
-        if self.position + 1 >= self.input.len() {
-            return 0;
-        } else {
-            return self.input[self.position + 1];
-        }
+    fn peek(&self, spaces: usize) -> Result<u8> {
+        let peek_pos = self.position + spaces;
+        if peek_pos >= self.input.len() { bail!("EOF") }
+
+        Ok(self.input[peek_pos])
     }
     
     fn peek_match(&self, input: &str) -> Result<bool> {
