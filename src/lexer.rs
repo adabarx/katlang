@@ -6,54 +6,15 @@ use anyhow::{Result, bail};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
-    // user generated
     Ident(String),
     Lit(Literal),
     Op(Operator),
+    Cond(Conditional),
+    Surr(Surround),
 
-    // keywords
     Let,
-    If,
-    Elif,
-    Else,
-    Match,
-    True,
-    False,
-
-    // multi-char operators
-    ReturnOp,
-
-    // newlines/whitespace
     NewLine,
-
-    // surrounding chars
-    LParen,
-    RParen,
-    LSquirly,
-    RSquirly,
-
-    // symbols
     Comma,
-    Dot,
-    Pipe,
-    Plus,
-    Dash,
-    Equal,
-    FSlash,
-    BSlash,
-    Colon,
-    SemiColon,
-    Bang,
-    At,
-    Octothorpe,
-    Dollar,
-    Percent,
-    Caret,
-    Ampersand,
-    Asterisk,
-    Question,
-    Tilde,
-    Grave,
 
     EOF,
 }
@@ -86,9 +47,31 @@ impl Operator {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Surround {
+    Open(Scope),
+    Close(Scope),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scope {
+    Tuple,
+    List,
+    Block,
+    Lexical,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Conditional {
+    If,
+    Elif,
+    Else,
+    Match,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
-    Str(String),
-    Num(f64),
+    True,
+    False,
 }
 
 #[derive(Debug)]
