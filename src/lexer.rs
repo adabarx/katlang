@@ -8,69 +8,29 @@ use anyhow::{Result, bail};
 pub enum Token {
     // user generated
     Ident(String),
-    Lit(LiteralToken),
+    Lit(Literal),
+    Op(Operator),
 
     // keywords
-    Import,
     Let,
-    Mut,
-    Def,
-    Impl,
-    Struct,
-    Enum,
-    Object,
-    Trait,
-    Desc,
     If,
     Elif,
     Else,
     Match,
     True,
     False,
-    And,
-    Or,
-    Xor,
-    Not,
 
     // multi-char operators
     ReturnOp,
-    PipeOp,
-    AddAssignOp,
-    SubtractAssignOp,
-    MultiplyAssignOp,
-    DivideAssignOp,
-    ModulusAssignOp,
-    AndOp,
-    OrOp,
-    XorOp,
-    EqualOp,
-    NotEqualOp,
-    LessThanOp,
-    GrtrThanOp,
-    LessEqualOp,
-    GrtrEqualOp,
-    // UnsafeEqualOp,
-    // UnsafeNotEqualOp,
-    // UnsafeLessThanOp,
-    // UnsafeGrtrThanOp,
-    // UnsafeLessEqualOp,
-    // UnsafeGrtrEqualOp,
 
     // newlines/whitespace
     NewLine,
-    Tab,
 
     // surrounding chars
     LParen,
     RParen,
     LSquirly,
     RSquirly,
-    LBrack,
-    RBrack,
-    LTriangle,
-    RTriangle,
-    LAngle,
-    RAngle,
 
     // symbols
     Comma,
@@ -99,7 +59,34 @@ pub enum Token {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum LiteralToken {
+pub enum Operator {
+    NotAnd,
+    NotOr,
+    NotXor,
+    And,
+    Or,
+    Xor,
+    Not,
+}
+
+impl Operator {
+    pub fn is_unary(&self) -> bool {
+        match self {
+            Self::Not => true,
+            _ => false
+        }
+    }
+
+    pub fn is_binary(&self) -> bool {
+        match self {
+            Self::Not => false,
+            _ => true
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Literal {
     Str(String),
     Num(f64),
 }
