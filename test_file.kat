@@ -1,8 +1,10 @@
-let x = true
-let y = false
+let x = true 
+let y = false and x
 let z = true
 
 x and z
 !y
 
 x and z or y xor x !and y !or x !xor z
+
+let list = [true, false, true]

@@ -14,12 +14,12 @@ pub enum ASTNode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Unary {
-        operator: UnaryOperator,
         expression: Box<Expression>,
+        operator: UnaryOperator,
     },
     Binary {
-        operator: BinaryOperator,
         lhs: Box<Expression>,
+        operator: BinaryOperator,
         rhs: Box<Expression>,
     },
     Literal(Literal),
@@ -134,7 +134,6 @@ impl Parser {
             lhs: Box::new(lhs),
             rhs: Box::new(self.parse_expression(false)?),
         };
-        dbg!(&rv);
         Ok(match self.token.clone() {
             Token::BinaryOp(operator) => {
                 self.next_token()?; // on start of next expression
