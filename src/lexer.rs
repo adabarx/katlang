@@ -8,7 +8,8 @@ use anyhow::{Result, bail};
 pub enum Token {
     Ident(String),
     Lit(Literal),
-    Op(Operator),
+    UnaryOp(UnaryOperator),
+    BinaryOp(BinaryOperator),
     Cond(Conditional),
     Surr(Surround),
 
@@ -16,33 +17,22 @@ pub enum Token {
     Assign,
     NewLine,
     Comma,
+    EOF,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Operator {
+pub enum UnaryOperator {
+    Not,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BinaryOperator {
     NotAnd,
     NotOr,
     NotXor,
     And,
     Or,
     Xor,
-    Not,
-}
-
-impl Operator {
-    pub fn is_unary(&self) -> bool {
-        match self {
-            Self::Not => true,
-            _ => false
-        }
-    }
-
-    pub fn is_binary(&self) -> bool {
-        match self {
-            Self::Not => false,
-            _ => true
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -99,44 +89,46 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> Result<(usize, Token)> {
+        use Token::*;
+
         while self.ch == b' ' || self.ch == b'\t' { // skip whitespace
             self.next_char()?;
         }
 
         let tok = match self.ch {
-            b','  => Token::Comma,
-            b'='  => Token::Assign,
-            b'\n' => Token::NewLine,
+            b','  => Comma,
+            b'='  => Assign,
+            b'\n' => NewLine,
 
-            b'{'  => Token::Surr(Surround::Open(Scope::Block)),
-            b'}'  => Token::Surr(Surround::Close(Scope::Block)),
-            b'('  => Token::Surr(Surround::Open(Scope::Tuple)),
-            b')'  => Token::Surr(Surround::Close(Scope::Tuple)),
+            b'{'  => Surr(Surround::Open(Scope::Block)),
+            b'}'  => Surr(Surround::Close(Scope::Block)),
+            b'('  => Surr(Surround::Open(Scope::Tuple)),
+            b')'  => Surr(Surround::Close(Scope::Tuple)),
 
             b'!'  => 
-                if      self.next_match("and")? { Token::Op(Operator::NotAnd) }
-                else if self.next_match("or")?  { Token::Op(Operator::NotOr) }
-                else if self.next_match("xor")? { Token::Op(Operator::NotXor) }
-                else                            { Token::Op(Operator::Not) },
+                if      self.next_match("and")? { BinaryOp(BinaryOperator::NotAnd) }
+                else if self.next_match("or")?  { BinaryOp(BinaryOperator::NotOr) }
+                else if self.next_match("xor")? { BinaryOp(BinaryOperator::NotXor) }
+                else                            { UnaryOp(UnaryOperator::Not) },
 
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let ident = self.read_ident()?;
                 match ident.as_str() {
-                    "let"   => Token::Let,
-                    "if"    => Token::Cond(Conditional::If),
-                    "elif"  => Token::Cond(Conditional::Elif),
-                    "else"  => Token::Cond(Conditional::Else),
-                    "match" => Token::Cond(Conditional::Match),
-                    "true"  => Token::Lit(Literal::True),
-                    "false" => Token::Lit(Literal::False),
-                    "and"   => Token::Op(Operator::And),
-                    "or"    => Token::Op(Operator::Or),
-                    "xor"   => Token::Op(Operator::Xor),
-                    _ => Token::Ident(ident.to_string())
+                    "let"   => Let,
+                    "if"    => Cond(Conditional::If),
+                    "elif"  => Cond(Conditional::Elif),
+                    "else"  => Cond(Conditional::Else),
+                    "match" => Cond(Conditional::Match),
+                    "true"  => Lit(Literal::True),
+                    "false" => Lit(Literal::False),
+                    "and"   => BinaryOp(BinaryOperator::And),
+                    "or"    => BinaryOp(BinaryOperator::Or),
+                    "xor"   => BinaryOp(BinaryOperator::Xor),
+                    _ => Ident(ident.to_string())
                 }
             },
             // b'0'..=b'9' => {
-            //     Token::Lit(LiteralToken::Num(self.read_number_literal()?))
+            //     Lit(LiteralToken::Num(self.read_number_literal()?))
             // },
             0 => bail!("EOF"),
             _ => bail!("Invalid Token"),
@@ -180,10 +172,10 @@ impl Lexer {
 
     fn read_ident(&mut self) -> Result<String> {
         let pos = self.position;
-        while self.ch.is_ascii_alphabetic() || self.ch == b'_' {
+        while self.peek(1)?.is_ascii_alphabetic() || self.peek(1)? == b'_' {
             self.next_char()?;
         }
-        Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
+        Ok(String::from_utf8_lossy(&self.input[pos..=self.position]).to_string())
     }
 
     fn peek(&self, offset: usize) -> Result<u8> {
@@ -193,7 +185,7 @@ impl Lexer {
         Ok(self.input[peek_pos])
     }
     
-    fn next_match(&self, input: &str) -> Result<bool> {
+    fn next_match(&mut self, input: &str) -> Result<bool> {
         // check if the upcoming characters match the input
         // and advance the lexer if true
         let mut offset = 1;
