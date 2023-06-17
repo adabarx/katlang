@@ -35,13 +35,13 @@ pub enum BinaryOperator {
     Xor,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Surround {
     Open(Scope),
     Close(Scope),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scope {
     Tuple,
     List,
@@ -49,7 +49,7 @@ pub enum Scope {
     Lexical,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Conditional {
     If,
     Elif,
@@ -100,12 +100,20 @@ impl Lexer {
             b'='  => Assign,
             b'\n' => NewLine,
 
-            b'{'  => Surr(Surround::Open(Scope::Block)),
-            b'}'  => Surr(Surround::Close(Scope::Block)),
-            b'('  => Surr(Surround::Open(Scope::Tuple)),
-            b')'  => Surr(Surround::Close(Scope::Tuple)),
+            b'{' => Surr(Surround::Open(Scope::Block)),
+            b'}' => Surr(Surround::Close(Scope::Block)),
+            b'(' => Surr(Surround::Open(Scope::Tuple)),
+            b')' => Surr(Surround::Close(Scope::Tuple)),
+            b'[' => Surr(Surround::Open(Scope::List)),
+            b']' => Surr(Surround::Close(Scope::List)),
+            b'|' => 
+                if self.next_char()? == b'>' { Surr(Surround::Open(Scope::Lexical)) }
+                else { bail!("invalid char") },
+            b'<' => 
+                if self.next_char()? == b'|' { Surr(Surround::Close(Scope::Lexical)) }
+                else { bail!("invalid char") },
 
-            b'!'  => 
+            b'!' => 
                 if      self.next_match("and")? { BinaryOp(BinaryOperator::NotAnd) }
                 else if self.next_match("or")?  { BinaryOp(BinaryOperator::NotOr) }
                 else if self.next_match("xor")? { BinaryOp(BinaryOperator::NotXor) }
@@ -118,7 +126,7 @@ impl Lexer {
                     "if"    => Cond(Conditional::If),
                     "elif"  => Cond(Conditional::Elif),
                     "else"  => Cond(Conditional::Else),
-                    "match" => Cond(Conditional::Match),
+                    // "match" => Cond(Conditional::Match),
                     "true"  => Lit(Literal::True),
                     "false" => Lit(Literal::False),
                     "and"   => BinaryOp(BinaryOperator::And),

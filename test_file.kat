@@ -2,9 +2,16 @@ let x = true
 let y = false and x
 let z = true
 
-x and z
-!y
+{
+    let zed = false
+    x and z
+    !y
+}
+
+|>
+   let yiff = true
+   let kai = false
+<|
 
 x and z or y xor x !and y !or x !xor z
 
-let list = [true, false, true]

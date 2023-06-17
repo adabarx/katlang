@@ -21,15 +21,9 @@ fn main() {
         dbg!(&tokens);
 
         let mut parser = Parser::new(tokens);
-        let mut tree = vec![];
-        loop {
-            match parser.parse_statement() {
-                Ok(node) => tree.push(node),
-                Err(e) => { dbg!(e); break }
-            }
-        }
+        let astree = parser.lfg();
 
-        dbg!(&tree);
+        dbg!(&astree);
 
         // 2: parse into abstract syntax tree
     } else {
