@@ -142,7 +142,7 @@ impl Parser {
         while self.token == NewLine { self.next_token()?; }
         dbg!(&self.token);
         let rv = match self.token {
-            Ident(_) | Lit(_) | UnaryOp(_) =>
+            Ident(_) | Lit(_) | BinaryOp(_) |UnaryOp(_) =>
                 ASTNode::Expr(self.parse_expression(true)?),
             Surr(Surround::Open(new_scope_tok)) => {
                 self.scope_stack.push(ScopeTree::new(new_scope_tok));
