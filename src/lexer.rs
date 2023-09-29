@@ -6,102 +6,71 @@ use anyhow::{Result, bail};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
-    // user generated
     Ident(String),
-    Lit(LiteralToken),
+    Lit(Literal),
+    Op(Operator),
+    Cond(Conditional),
+    Surr(Surround),
 
-    // keywords
-    Import,
     Let,
-    Mut,
-    Def,
-    Impl,
-    Struct,
-    Enum,
-    Object,
-    Trait,
-    Desc,
-    If,
-    Elif,
-    Else,
-    Match,
-    True,
-    False,
+    Assign,
+    NewLine,
+    Comma,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Operator {
+    NotAnd,
+    NotOr,
+    NotXor,
     And,
     Or,
     Xor,
     Not,
+}
 
-    // multi-char operators
-    ReturnOp,
-    PipeOp,
-    AddAssignOp,
-    SubtractAssignOp,
-    MultiplyAssignOp,
-    DivideAssignOp,
-    ModulusAssignOp,
-    AndOp,
-    OrOp,
-    XorOp,
-    EqualOp,
-    NotEqualOp,
-    LessThanOp,
-    GrtrThanOp,
-    LessEqualOp,
-    GrtrEqualOp,
-    // UnsafeEqualOp,
-    // UnsafeNotEqualOp,
-    // UnsafeLessThanOp,
-    // UnsafeGrtrThanOp,
-    // UnsafeLessEqualOp,
-    // UnsafeGrtrEqualOp,
+impl Operator {
+    pub fn is_unary(&self) -> bool {
+        match self {
+            Self::Not => true,
+            _ => false
+        }
+    }
 
-    // newlines/whitespace
-    NewLine,
-    Tab,
-
-    // surrounding chars
-    LParen,
-    RParen,
-    LSquirly,
-    RSquirly,
-    LBrack,
-    RBrack,
-    LTriangle,
-    RTriangle,
-    LAngle,
-    RAngle,
-
-    // symbols
-    Comma,
-    Dot,
-    Pipe,
-    Plus,
-    Dash,
-    Equal,
-    FSlash,
-    BSlash,
-    Colon,
-    SemiColon,
-    Bang,
-    At,
-    Octothorpe,
-    Dollar,
-    Percent,
-    Caret,
-    Ampersand,
-    Asterisk,
-    Question,
-    Tilde,
-    Grave,
-
-    EOF,
+    pub fn is_binary(&self) -> bool {
+        match self {
+            Self::Not => false,
+            _ => true
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum LiteralToken {
-    Str(String),
-    Num(f64),
+pub enum Surround {
+    Open(Scope),
+    Close(Scope),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scope {
+    Tuple,
+    List,
+    Block,
+    Lexical,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Conditional {
+    If,
+    Elif,
+    Else,
+    Match,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Literal {
+    True,
+    False,
 }
 
 #[derive(Debug)]
@@ -135,85 +104,42 @@ impl Lexer {
         }
 
         let tok = match self.ch {
-            b'{'  => Token::LSquirly,
-            b'}'  => Token::RSquirly,
-            b'('  => Token::LParen,
-            b')'  => Token::RParen,
-            b'['  => Token::LBrack,
-            b']'  => Token::RBrack,
-            b'<'  => match self.next_char()? {
-                b'|' => Token::RTriangle,
-                b'=' => Token::LessEqualOp,
-                _ => Token::LAngle,
-            },
-            b'>'  => match self.next_char()? {
-                b'=' => Token::GrtrEqualOp,
-                _ => Token::RAngle,
-            }
             b','  => Token::Comma,
-            b'.'  => Token::Dot,
-            b'?'  => Token::Question,
-            b':'  => Token::Colon,
-            b';'  => Token::SemiColon,
-            b'!'  => if self.next_char()? == b'=' {Token::NotEqualOp } else { Token::Bang },
-            b'@'  => Token::At,
-            b'#'  => Token::Octothorpe,
-            b'$'  => Token::Dollar,
-            b'%'  => Token::Percent,
-            b'^'  => if self.next_char()? == b'&' { Token::XorOp } else { Token::Caret },
-            b'&'  => if self.next_char()? == b'&' { Token::AndOp } else { Token::Ampersand },
-            b'*'  => if self.next_char()? == b'=' { Token::MultiplyAssignOp } else { Token::Asterisk },
-            b'-'  => if self.next_char()? == b'=' { Token::SubtractAssignOp } else { Token::Dash },
-            b'='  => if self.next_char()? == b'=' { Token::EqualOp } else { Token::Equal },
-            b'+'  => if self.next_char()? == b'=' { Token::AddAssignOp } else { Token::Plus },
-            b'|'  => match self.next_char()? {
-                b'>' => Token::LTriangle,
-                b'|' => Token::OrOp,
-                _ => Token::Pipe,
-            },
-            b'\\' => Token::BSlash,
-            b'/'  => match self.next_char()? {
-                b'/' => loop { if self.next_char()? != b' ' { break Token::NewLine } } // handle comments
-                b'=' => Token::DivideAssignOp,
-                _ => Token::FSlash,
-            },
-            b'~'  => Token::Tilde,
-            b'`'  => Token::Grave,
-            b'\t' => Token::Tab,
+            b'='  => Token::Assign,
             b'\n' => Token::NewLine,
 
-            b'\'' | b'"' => Token::Lit(LiteralToken::Str(self.read_string_literal()?.to_string())),
+            b'{'  => Token::Surr(Surround::Open(Scope::Block)),
+            b'}'  => Token::Surr(Surround::Close(Scope::Block)),
+            b'('  => Token::Surr(Surround::Open(Scope::Tuple)),
+            b')'  => Token::Surr(Surround::Close(Scope::Tuple)),
+
+            b'!'  => 
+                if      self.next_match("and")? { Token::Op(Operator::NotAnd) }
+                else if self.next_match("or")?  { Token::Op(Operator::NotOr) }
+                else if self.next_match("xor")? { Token::Op(Operator::NotXor) }
+                else                            { Token::Op(Operator::Not) },
+
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let ident = self.read_ident()?;
                 match ident.as_str() {
-                    "import" => Token::Import,
-                    "let"    => Token::Let,
-                    "mut"    => Token::Mut,
-                    "def"    => Token::Def,
-                    "struct" => Token::Struct,
-                    "enum"   => Token::Enum,
-                    "object" => Token::Object,
-                    "trait"  => Token::Trait,
-                    "desc"   => Token::Desc,
-                    "impl"   => Token::Impl,
-                    "if"     => Token::If,
-                    "elif"   => Token::Elif,
-                    "else"   => Token::Else,
-                    "match"  => Token::Match,
-                    "true"   => Token::True,
-                    "false"  => Token::False,
-                    "and"    => Token::And,
-                    "or"     => Token::Or,
-                    "xor"    => Token::Xor,
-                    "not"    => Token::Not,
+                    "let"   => Token::Let,
+                    "if"    => Token::Cond(Conditional::If),
+                    "elif"  => Token::Cond(Conditional::Elif),
+                    "else"  => Token::Cond(Conditional::Else),
+                    "match" => Token::Cond(Conditional::Match),
+                    "true"  => Token::Lit(Literal::True),
+                    "false" => Token::Lit(Literal::False),
+                    "and"   => Token::Op(Operator::And),
+                    "or"    => Token::Op(Operator::Or),
+                    "xor"   => Token::Op(Operator::Xor),
                     _ => Token::Ident(ident.to_string())
                 }
             },
-            b'0'..=b'9' => {
-                Token::Lit(LiteralToken::Num(self.read_number_literal()?))
-            },
-            0 => Token::EOF,
-            _ => Token::EOF,
+            // b'0'..=b'9' => {
+            //     Token::Lit(LiteralToken::Num(self.read_number_literal()?))
+            // },
+            0 => bail!("EOF"),
+            _ => bail!("Invalid Token"),
         };
 
          self.next_char()?;
@@ -260,21 +186,24 @@ impl Lexer {
         Ok(String::from_utf8_lossy(&self.input[pos..self.position]).to_string())
     }
 
-    fn peek(&self, spaces: usize) -> Result<u8> {
-        let peek_pos = self.position + spaces;
+    fn peek(&self, offset: usize) -> Result<u8> {
+        let peek_pos = self.position + offset;
         if peek_pos >= self.input.len() { bail!("EOF") }
 
         Ok(self.input[peek_pos])
     }
     
-    fn peek_match(&self, input: &str) -> Result<bool> {
-        if input.chars().count() + self.position + 1 >= self.input.len() { bail!("EOF") };
-
-        let mut forward = 1;
+    fn next_match(&self, input: &str) -> Result<bool> {
+        // check if the upcoming characters match the input
+        // and advance the lexer if true
+        let mut offset = 1;
         for ch in input.chars() {
-            if self.input[self.position + forward] != ch as u8 { return Ok(false) }
-            else { forward += 1 }
+            if self.peek(offset)? == ch as u8 { offset += 1 }
+            else { return Ok(false) }
         }
+
+        for _ in 0..offset { self.next_char()?; }
+
         Ok(true)
     }
 
