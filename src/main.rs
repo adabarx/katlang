@@ -1,7 +1,8 @@
 mod lexer;
 mod ast;
 
-use lexer::{Lexer, Token};
+use lexer::Lexer;
+use ast::Parser;
 
 // 1: tokenize into basic symbols, keywords, and literals
 // 2: parse into abstract syntax tree
@@ -13,16 +14,16 @@ fn main() {
         let mut tokens = vec![];
         loop {
             match lexer.next_token() {
-                Ok((_, result)) =>
-                    if result == Token::EOF { break } 
-                    else { tokens.push(result) },
-                Err(e) => {
-                    dbg!(e);
-                    break;
-                }
+                Ok((_, result)) => tokens.push(result),
+                Err(e) => { dbg!(e); break; }
             }
         }
         dbg!(&tokens);
+
+        let mut parser = Parser::new(tokens);
+        let astree = parser.lfg();
+
+        dbg!(&astree);
 
         // 2: parse into abstract syntax tree
     } else {

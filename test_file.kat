@@ -1,14 +1,17 @@
-let int = "fasdgjkalhgjkld"
-let x = 4.5
-let y = "2.5"
-let z = 1
+let x = true 
+let y = false and x
+let z = true
 
-if z == y {
-    x *= 2
+{
+    let zed = false
+    x and z
+    !y
 }
 
-struct GiJoe {
-    muscle: 10,
-    steroids: "over 9000",
-}
+|>
+   let yiff = true
+   let kai = false
+<|
+
+x and z or y xor x !and y !or x !xor z
 
